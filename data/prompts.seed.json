@@ -1,0 +1,56 @@
+{
+  "prompts": [
+    {
+      "id": "minimalist_loft_creative_portrait",
+      "title": "Minimalist Loft Creative Portrait",
+      "promptText": "A stylish professional portrait of a creative director in a minimalist loft studio. The subject wears a structured linen blazer over a casual t-shirt. Seated on a vintage stool, leaning forward slightly with elbows on knees, engaging the camera. Lighting is soft and diffused natural light coming from a large north-facing window, creating a wrap-around effect. The color palette is neutral earth tones (beige, cream, olive).",
+      "genres": ["Portrait", "Character"],
+      "styles": ["Photorealistic", "Editorial"],
+      "moods": ["Minimal", "Calm"],
+      "createdAt": "2025-12-01T10:00:00.000Z",
+      "source": { "name": "seed" }
+    },
+    {
+      "id": "scene_cappuccino_shipyard",
+      "title": "Cappuccino Shipyard Fantasy",
+      "promptText": "{ \"id\": \"scene_cappuccino_shipyard\", \"subject\": { \"team\": \"Miniature dockworkers and sailors\", \"action\": \"Constructing and repairing foam ships drifting across a cappuccino surface\", \"details\": [ \"Workers rowing through milk foam in bottle-cap boats\", \"Latte art waves reshaped into docks\", \"Tiny lifebuoys made from sugar rings\" ] }, \"environment\": { \"macro_object\": \"Fresh cappuccino with dense foam and crema swirls\", \"background\": \"Coffee cup rim towering like harbor walls, spoon blurred in distance\", \"lighting\": \"Soft café lighting with warm reflections, steam catching highlights\" }, \"mood\": \"Cozy maritime fantasy with café warmth\", \"style\": \"Hyper-real macro realism, cinematic depth, tilt-shift micro-world aesthetic\" }",
+      "genres": ["Still Life", "Fantasy"],
+      "styles": ["Macro", "Cinematic"],
+      "moods": ["Cozy", "Whimsical"],
+      "createdAt": "2025-12-03T10:00:00.000Z",
+      "source": { "name": "seed" }
+    },
+    {
+      "id": "film_camera_coastal_nook",
+      "title": "Film Camera Coastal Nook",
+      "promptText": "A miniature coastal living space built inside the hollow body of an old film camera. Inside, a person lounges on a small sofa facing a panoramic window that reveals rolling ocean waves. Seashells, a model sailboat, and scattered photographs decorate the room. Sunlight streams through the lens opening, creating soft lens flares and realistic reflections. Ultra-detailed metal textures, cinematic macro depth, calm and nostalgic atmosphere.",
+      "genres": ["Still Life", "Landscape"],
+      "styles": ["Cinematic", "Macro"],
+      "moods": ["Nostalgic", "Calm"],
+      "createdAt": "2025-12-05T10:00:00.000Z",
+      "source": { "name": "seed" }
+    },
+    {
+      "id": "cozy_winter_train_portrait",
+      "title": "Cozy Winter Train Portrait",
+      "promptText": "{ \"image_prompt\": { \"reference\": { \"face_identity\": \"uploaded reference image\", \"identity_lock\": true, \"face_preservation\": \"100% identical facial structure, proportions, skin texture, eye shape, lips, nose, brows, moles, and natural expression\" }, \"subject\": { \"type\": \"young woman\", \"expression\": \"soft, relaxed smile\", \"gaze\": \"looking gently toward the camera\", \"pose\": { \"position\": \"leaning out of a train window\", \"arms\": \"both arms resting on the window frame\", \"posture\": \"relaxed and cozy\" } }, \"environment\": { \"location\": \"inside a red panoramic train traveling through snowy mountains\" }, \"lighting\": { \"type\": \"natural cold daylight\" }, \"photography_style\": { \"style\": \"cinematic travel portrait\" } } }",
+      "genres": ["Portrait"],
+      "styles": ["Cinematic", "Photorealistic"],
+      "moods": ["Cozy", "Peaceful"],
+      "createdAt": "2025-12-06T10:00:00.000Z",
+      "source": { "name": "seed" }
+    },
+    {
+      "id": "vintage_matchbox_noir",
+      "title": "Vintage Matchbox Noir",
+      "promptText": "A hyper-detailed miniature diorama hidden inside an open vintage matchbox. Within the narrow space, a lone figure sits at a tiny café table under a flickering neon sign while rain streaks down invisible glass walls. A miniature espresso cup steams gently, puddles reflect warm light, and a folded newspaper rests on the table. Cool blue rain lighting contrasts with warm interior glow. Photorealistic paper fibers, handcrafted props, macro lens compression, cinematic noir mood.",
+      "genres": ["Cityscape", "Still Life"],
+      "styles": ["Cinematic", "Macro"],
+      "moods": ["Noir", "Moody"],
+      "createdAt": "2025-12-08T10:00:00.000Z",
+      "source": { "name": "seed" }
+    }
+  ]
+}
+
+

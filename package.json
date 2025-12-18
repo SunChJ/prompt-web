@@ -1,0 +1,19 @@
+{
+  "name": "prompt-web",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c green,cyan \"pnpm -C apps/api dev\" \"pnpm -C apps/web dev\"",
+    "build": "pnpm -C apps/api build && pnpm -C apps/web build",
+    "start": "pnpm -C apps/api start",
+    "typecheck": "pnpm -C apps/api typecheck && pnpm -C apps/web typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
+
+
