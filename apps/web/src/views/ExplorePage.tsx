@@ -114,10 +114,20 @@ function PromptCard({ prompt, onOpen }: { prompt: Prompt; onOpen: () => void }) 
   return (
     <div className="banana-surface overflow-hidden">
       <button type="button" onClick={onOpen} className="block w-full text-left">
-        <div className="relative h-56">
-          <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/70" />
-          <div className="absolute -inset-10 bg-[radial-gradient(circle_at_30%_30%,rgba(255,219,117,0.08),transparent_55%)]" />
-          <div className="absolute -inset-10 bg-[radial-gradient(circle_at_70%_50%,rgba(255,219,117,0.06),transparent_55%)]" />
+        <div className="relative h-56 overflow-hidden">
+          {prompt.imageUrl ? (
+            <img 
+              src={prompt.imageUrl} 
+              alt={prompt.title} 
+              className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+            />
+          ) : (
+            <>
+              <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/70" />
+              <div className="absolute -inset-10 bg-[radial-gradient(circle_at_30%_30%,rgba(255,219,117,0.08),transparent_55%)]" />
+              <div className="absolute -inset-10 bg-[radial-gradient(circle_at_70%_50%,rgba(255,219,117,0.06),transparent_55%)]" />
+            </>
+          )}
         </div>
         <div className="px-6">
           <div className="mt-6 text-2xl font-semibold tracking-tight text-banana-fg">{prompt.title}</div>

@@ -6,6 +6,7 @@ export type Prompt = {
   styles: string[];
   moods: string[];
   createdAt?: string;
+  imageUrl?: string;
   source?: { name?: string; url?: string };
 };
 

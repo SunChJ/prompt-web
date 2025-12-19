@@ -1,0 +1,32 @@
+{
+  "prompts": [
+    {
+      "id": "gemini_1766136056252_0",
+      "title": "[Bald Eagle] portrayed in a Watercolor Wildlife Portrait, with splashes and drips forming the creature's features and habitat. Use [deep navy blue] as the primary color with [crimson red] accents to create a striking, emotive representation.",
+      "promptText": "[Bald Eagle] portrayed in a Watercolor Wildlife Portrait, with splashes and drips forming the creature's features and habitat. Use [deep navy blue] as the primary color with [crimson red] accents to create a striking, emotive representation.",
+      "imageUrl": "https://lh3.googleusercontent.com/gg/AIJ2gl-91hgzglUtSLMki0SfBLqadp-mIgoFukIiA6W5a1Sz296A-w1qNVInO4bfAuRCDDPfRUP0hxRynmGs_YlnfvG0PI-CmvRl5iZd-9nG1lgJV1P418DciyAO_P-UhwvNvwrCiMpK2VWvsjE15qmMQ6Diy9dFFyP_aAt_wdZFfzk_WSGPmHlpDuLLzbAL3BykGW5QIY44TyfmqYy7rjPxON0AT283Y-vBR_Do6c_fCbaosphxh8kU_YCAmWHWRy6cQDfvQBS6t1WZmgj88zc0BPWSgGemlaotayWyccjg0W2QmI0ovadHyGulqfK3ETn-Z9bJCOg-r0mPPOUeA7py2Ckm=s1024-rj",
+      "genres": [],
+      "styles": [],
+      "moods": [],
+      "createdAt": "2025-12-19T09:20:56.252Z",
+      "source": {
+        "name": "Gemini",
+        "url": "https://gemini.google.com/app/71814cf4f05ea797#4dffbca3a9a5fb18"
+      }
+    },
+    {
+      "id": "gemini_1766136068174_1",
+      "title": "Make a Polaroid of the dog wearing a Christmas hat and a red and blue scarf. Photo realistic. He’s on Santa’s Lap.",
+      "promptText": "Make a Polaroid of the dog wearing a Christmas hat and a red and blue scarf. Photo realistic. He’s on Santa’s Lap.",
+      "imageUrl": "https://lh3.googleusercontent.com/gg/AIJ2gl85LcZnQOtKESABVD9eY1INJhioLasW80iHWgVspx27qPOw0jCoBn01JtVxxfjNW7NrTBeMk1ia8h6ij-UArBWFPkTWXpo_02-VeLJQnbdBh996XKTgFHdV-BfVkGtJzt2L3uM2vqOhKX9JstGqDhCSwmQorlxxDgiD1bAm1m_GeP5j58kKayLGeRgLDkF3n5qNoSUeA7GVA9am1ZjcH1xdH9QXVynju3AC7_nZqhrjtYX-_UBvZELEzq-tqBzG8CrPcpHJQliZXjntk6ykihKhVkuJEIYEJuEGR78oikWxtMW3gewi0WKob4296zc_dZaBVFzdujX422A8L60hwfjI=s1024-rj",
+      "genres": [],
+      "styles": [],
+      "moods": [],
+      "createdAt": "2025-12-19T09:21:08.174Z",
+      "source": {
+        "name": "Gemini",
+        "url": "https://gemini.google.com/app/35b7229e23721c42#8253d28af57ed7ee"
+      }
+    }
+  ]
+}

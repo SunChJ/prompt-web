@@ -50,3 +50,18 @@ Configured in `apps/api/wrangler.toml`.
 
 ### Frontend (Pages)
 Configured for Cloudflare Pages with SPA support via `public/_redirects`.
+
+---
+
+## 💎 Gemini Data Ingest
+You can easily import your prompts and images from Google Gemini:
+
+1. **Batch Export**: Use the [Gemini Export Script](scripts/gemini_batch_exporter.js) in your browser console on the Gemini "My Stuff" page.
+2. **Bulk Import**: Run the following command with the exported JSON:
+   ```bash
+   pnpm bulk-import ./path/to/gemini_export.json
+   ```
+3. **Single Import**: Add a prompt manually via CLI:
+   ```bash
+   pnpm add-prompt "Title" "Prompt Text" "Genres" "Styles" "Moods" "ImageUrl"
+   ```

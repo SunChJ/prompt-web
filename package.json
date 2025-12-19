@@ -9,11 +9,13 @@
     "dev": "concurrently -n api,web -c green,cyan \"pnpm -C apps/api dev\" \"pnpm -C apps/web dev\"",
     "build": "pnpm -C apps/api build && pnpm -C apps/web build",
     "start": "pnpm -C apps/api start",
-    "typecheck": "pnpm -C apps/api typecheck && pnpm -C apps/web typecheck"
+    "typecheck": "pnpm -C apps/api typecheck && pnpm -C apps/web typecheck",
+    "add-prompt": "node scripts/import.mjs",
+    "bulk-import": "node scripts/bulk_import.mjs",
+    "export-gemini": "node scripts/gemini_playwright_extractor.mjs"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "playwright": "^1.57.0"
   }
 }
-
-

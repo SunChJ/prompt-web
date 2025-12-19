@@ -8,6 +8,7 @@ export const PromptSchema = z.object({
   styles: z.array(z.string().min(1)).default([]),
   moods: z.array(z.string().min(1)).default([]),
   createdAt: z.string().datetime().optional(),
+  imageUrl: z.string().url().or(z.string().regex(/^\/images\//)).optional(),
   source: z
     .object({
       name: z.string().min(1).optional(),
