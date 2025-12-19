@@ -456,9 +456,9 @@ async function scrollListTo(page, top) {
   }, top).catch(() => null);
 }
 
-async function getFirstRowTargets(page, { batchSize }) {
-  // Returns the first (top-most) visible row items, ordered left->right, and an estimated row scroll delta.
-  return await page.evaluate(({ batchSize }) => {
+async function getVisibleTargets(page) {
+  // Returns all visible items in the viewport, ordered by reading order (top->bottom, left->right).
+  return await page.evaluate(() => {
     function pickThumb(container) {
       const img = container.querySelector('img.thumbnail') || container.querySelector('img');
       const src = img?.getAttribute?.('src') || img?.src || '';
@@ -471,8 +471,11 @@ async function getFirstRowTargets(page, { batchSize }) {
       const host = c.closest?.('library-item-card') || null;
       const r = c.getBoundingClientRect();
       if (!Number.isFinite(r.top) || !Number.isFinite(r.left)) continue;
-      // Only consider elements that are actually in the viewport and have a thumbnail src.
-      if (r.bottom <= 0 || r.top >= window.innerHeight) continue;
+
+      // Filter out items that are not in the current viewport. 
+      // We allow a small buffer to catch items that are almost fully visible.
+      if (r.bottom <= 5 || r.top >= window.innerHeight - 5) continue;
+
       const { src } = pickThumb(c);
       if (!src) continue;
       const title =
@@ -489,54 +492,25 @@ async function getFirstRowTargets(page, { batchSize }) {
       });
     }
 
-    // No hydrated containers yet
-    if (candidates.length === 0) return { targets: [], rowDelta: 0 };
-
-    // Find the top-most row baseline.
-    // IMPORTANT: Gemini grid isn't always pixel-perfect; different cards can differ by a few px in top.
-    // We'll use a dynamic tolerance derived from card heights + a fallback that always returns N targets.
-    candidates.sort((a, b) => a.top - b.top || a.left - b.left);
-    const baselineTop = candidates[0].top;
-
-    const heights = candidates.map((c) => c.height).filter((h) => Number.isFinite(h) && h > 0).sort((a, b) => a - b);
-    const medianH = heights.length ? heights[Math.floor(heights.length / 2)] : 0;
-    const rowTol = Math.max(12, Math.min(44, Math.round(medianH * 0.35) || 18));
-
-    let row1 = candidates.filter((c) => Math.abs(c.top - baselineTop) <= rowTol);
-    row1.sort((a, b) => a.left - b.left);
-
-    // Fallback: if grouping yields too few (e.g. masonry/uneven tops), take the first N in reading order.
-    // This prevents the "only 1 card selected → scroll immediately" behavior.
-    if (row1.length < Math.max(1, batchSize)) {
-      const fallback = candidates.slice(0, Math.max(1, batchSize));
-      fallback.sort((a, b) => a.top - b.top || a.left - b.left);
-      row1 = fallback;
-    }
-
-    // Estimate row delta as the distance from the baseline row to the next row's top (beyond tolerance).
-    let rowDelta = 0;
-    const nextTop = candidates
-      .map((c) => c.top)
-      .filter((t) => Number.isFinite(t) && t > baselineTop + rowTol)
-      .sort((a, b) => a - b)[0];
-    if (Number.isFinite(nextTop)) {
-      rowDelta = Math.max(0, Math.round(nextTop - baselineTop));
-    } else {
-      const h = row1[0]?.height || medianH || 0;
-      // heuristic: one card height plus a small gap
-      rowDelta = Math.max(0, Math.round(h ? h + 24 : 220));
-    }
+    // Sort by reading order: primarily top-to-bottom, secondarily left-to-right.
+    // Use a small tolerance for "top" so that items in the same row stay together.
+    candidates.sort((a, b) => {
+      const topDiff = a.top - b.top;
+      if (Math.abs(topDiff) > 20) return topDiff;
+      return a.left - b.left;
+    });
 
     return {
-      targets: row1.slice(0, Math.max(0, batchSize)).map((c) => ({
+      targets: candidates.map((c) => ({
         thumbSrc: c.thumbSrc,
         title: c.title,
         top: c.top,
         left: c.left,
+        height: c.height
       })),
-      rowDelta,
+      viewportHeight: window.innerHeight
     };
-  }, { batchSize }).catch(() => ({ targets: [], rowDelta: 0 }));
+  }).catch(() => ({ targets: [], viewportHeight: 0 }));
 }
 
 async function highlightRowTargets(page, { targets, color = '#ef4444' }) {
@@ -1115,7 +1089,7 @@ async function clickOnlyFlow({ page, context }) {
 }
 
 async function simulateRowBatchFlow({ page }) {
-  console.log('🧪 Mode: simulate (row-batch dry run). No clicking, no extraction.');
+  console.log('🧪 Mode: simulate (viewport-wide discovery). No clicking, no extraction.');
 
   await waitForCardList(page);
   await waitForHydratedCardContainers(page);
@@ -1127,6 +1101,8 @@ async function simulateRowBatchFlow({ page }) {
   let idle = 0;
   let steps = 0;
   const processed = new Set(); // thumb src cache
+  let lastProcessedCount = 0;
+  let sameCountSteps = 0;
 
   while (steps < EXTRACT_MAX_SCROLL_STEPS && idle < EXTRACT_IDLE_ROUNDS) {
     steps++;
@@ -1134,42 +1110,49 @@ async function simulateRowBatchFlow({ page }) {
     await waitForCardList(page);
     await waitForHydratedCardContainers(page);
 
-    const { targets, rowDelta } = await getFirstRowTargets(page, { batchSize: EXTRACT_ROW_BATCH_SIZE });
-    if (!targets || targets.length === 0) {
-      idle++;
-      await sleep(SIMULATE_STEP_PAUSE_MS);
-    } else {
-      idle = 0;
-      const titles = targets.map((t, i) => `${i + 1}:${(t.title || '').slice(0, 40)}`).join(' | ');
-      logI(`🧪 simulate: row=${steps} targets=${targets.length} rowDelta≈${Math.round(rowDelta || 0)} ${titles ? `| ${titles}` : ''}`);
-
-      // Sequential "scan" from left -> right, one card at a time.
-      for (let i = 0; i < targets.length; i++) {
-        const t = targets[i];
-        const src = t?.thumbSrc || '';
-        if (!src) continue;
-
-        const already = processed.has(src);
-        // Highlight processed as grey, active as red (even if already processed, keep it grey).
-        if (already) {
-          await highlightRowScanState(page, { activeThumbSrc: '', processedThumbSrcs: [src] });
-          await sleep(SIMULATE_PROCESSED_PAUSE_MS);
-          continue;
-        }
-
-        await highlightRowScanState(page, { activeThumbSrc: src, processedThumbSrcs: Array.from(processed) });
-        await sleep(SIMULATE_STEP_PAUSE_MS);
-        processed.add(src);
-      }
-
-      const effectiveRowDelta = Math.max(40, Math.round(Number.isFinite(rowDelta) && rowDelta > 0 ? rowDelta : 220));
-      await sleep(SIMULATE_AFTER_BATCH_PAUSE_MS);
-      await scrollListBy(page, scrollSign * effectiveRowDelta);
+    const metrics = await getListScrollMetrics(page);
+    const { targets, viewportHeight } = await getVisibleTargets(page);
+    
+    // Filter out already processed items
+    const unprocessed = targets.filter(t => !processed.has(t.thumbSrc));
+    
+    if (unprocessed.length === 0) {
+      // Nothing new in viewport -> scroll down
+      const delta = Math.max(200, Math.floor((metrics?.clientHeight || viewportHeight || 600) * 0.8));
+      logI(`🧪 simulate: step=${steps} viewport exhausted -> Scrolling by ${delta}px (scrollTop=${metrics?.scrollTop || 0})`);
+      
+      await scrollListBy(page, scrollSign * delta);
       await sleep(EXTRACT_SCROLL_PAUSE_MS);
+      
+      // If we've seen no new items for multiple steps despite scrolling, we might be at the end.
+      if (processed.size === lastProcessedCount) {
+        sameCountSteps++;
+        if (sameCountSteps >= 4) idle++;
+      } else {
+        sameCountSteps = 0;
+        idle = 0;
+      }
+      lastProcessedCount = processed.size;
+      continue;
     }
+
+    // Found new items in viewport -> process them
+    idle = 0;
+    sameCountSteps = 0;
+    lastProcessedCount = processed.size;
+
+    logI(`🧪 simulate: step=${steps} found ${unprocessed.length} new targets in viewport (scrolled: ${metrics?.scrollTop || 0})`);
+
+    for (const t of unprocessed) {
+      await highlightRowScanState(page, { activeThumbSrc: t.thumbSrc, processedThumbSrcs: Array.from(processed) });
+      await sleep(SIMULATE_STEP_PAUSE_MS);
+      processed.add(t.thumbSrc);
+    }
+    
+    await sleep(SIMULATE_AFTER_BATCH_PAUSE_MS);
   }
 
-  logI(`🧪 simulate done: rows=${steps} idle=${idle} processed=${processed.size}`);
+  logI(`🧪 simulate done: steps=${steps} processed=${processed.size}`);
   if (SIMULATE_AUTO_CLOSE) {
     logI('🧹 GEMINI_SIMULATE_AUTO_CLOSE=1 → closing the tab.');
     await page.close();
@@ -1179,23 +1162,21 @@ async function simulateRowBatchFlow({ page }) {
 }
 
 async function extractByScrolling({ page, context, limit }) {
-  // NOTE: despite the name, this is now "row-batch extraction":
-  //  - on list page, read the first visible row (left->right) and click items 1..N (default 5)
-  //  - after N items, scroll by ~one row height and repeat
-  logI(`🧭 Extract(row-batch): starting (limit=${limit || '∞'}, batchSize=${EXTRACT_ROW_BATCH_SIZE})`);
+  logI(`🧭 Extract(viewport-wide): starting (limit=${limit || '∞'})`);
 
   const results = [];
-  const processed = new Set(); // thumb src
+  const processed = new Set(); // thumb src cache
 
   await waitForCardList(page);
   await waitForHydratedCardContainers(page);
   await scrollListTo(page, 0);
   await sleep(EXTRACT_SCROLL_PAUSE_MS);
 
+  const scrollSign = EXTRACT_ROW_SCROLL_DIRECTION === 'up' ? -1 : 1;
   let idle = 0;
   let steps = 0;
-
-  const scrollSign = EXTRACT_ROW_SCROLL_DIRECTION === 'up' ? -1 : 1;
+  let lastProcessedCount = 0;
+  let sameCountSteps = 0;
 
   while (steps < EXTRACT_MAX_SCROLL_STEPS && idle < EXTRACT_IDLE_ROUNDS) {
     if (limit && results.length >= limit) break;
@@ -1204,150 +1185,168 @@ async function extractByScrolling({ page, context, limit }) {
     await waitForCardList(page);
     await waitForHydratedCardContainers(page);
 
-    const before = processed.size;
-    const { targets, rowDelta } = await getFirstRowTargets(page, { batchSize: EXTRACT_ROW_BATCH_SIZE });
+    const metrics = await getListScrollMetrics(page);
+    const { targets, viewportHeight } = await getVisibleTargets(page);
+    
+    const unprocessed = targets.filter(t => !processed.has(t.thumbSrc));
 
-    if (!targets || targets.length === 0) {
-      idle++;
-    } else {
-      for (let j = 0; j < targets.length; j++) {
-        if (limit && results.length >= limit) break;
-        const item = targets[j];
-        if (!item?.thumbSrc || processed.has(item.thumbSrc)) continue;
-        processed.add(item.thumbSrc);
-
-        const startUrl = page.url();
-        const scrollBefore = await getListScrollMetrics(page);
-
-        const opened = await (async () => {
-          // Locate the card host by matching thumbnail src via XPath (CSS escaping is annoying here).
-          const x = `xpath=//img[contains(@class,"thumbnail") and @src=${xpathLiteral(item.thumbSrc)}]/ancestor::library-item-card[1]`;
-          const cardHost = page.locator(x).first();
-          const countHost = await cardHost.count().catch(() => 0);
-
-          if (countHost > 0) {
-            const sessionUrl = await resolveSessionUrlFromCard(page, cardHost);
-            if (sessionUrl) {
-              const sp = await context.newPage();
-              await sp.goto(sessionUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-              return { kind: 'newTab', page: sp };
-            }
-            return await clickCardWithRetries({
-              page,
-              card: cardHost,
-              index: `${results.length + 1}`,
-              titleForLog: item.title || `Row item ${j + 1}`,
-            });
-          }
-
-          // Fallback: evaluate click by exact src match
-          const clicked = await page.evaluate((src) => {
-            const imgEl = Array.from(document.querySelectorAll('img.thumbnail')).find(
-              (i) => i.getAttribute('src') === src || i.src === src
-            );
-            if (!imgEl) return false;
-            imgEl.scrollIntoView({ block: 'center' });
-            imgEl.click();
-            return true;
-          }, item.thumbSrc).catch(() => false);
-
-          if (!clicked) return { kind: 'failed', page };
-          await waitForSessionOpen(page, startUrl);
-          return { kind: 'samePage', page };
-        })();
-
-        const sessionPage = opened?.page;
-        if (!opened || opened.kind === 'failed' || !sessionPage) {
-          // count failures as no-progress for idle heuristics
-          idle++;
-          continue;
-        }
-
-        try {
-          await sessionPage.locator(SESSION_READY_SELECTOR).first().waitFor({ state: 'visible', timeout: 25000 });
-          await page.waitForTimeout(1500);
-
-          const promptData = await sessionPage.evaluate(() => {
-            let conversationTitle = '';
-            const ct = document.querySelector('.conversation-title');
-            if (ct && ct.textContent) conversationTitle = ct.textContent.trim();
-
-            let text = '';
-            const bubble = document.querySelector('.user-query-bubble-with-background');
-            if (bubble) {
-              const lines = Array.from(bubble.querySelectorAll('.query-text-line'))
-                .map(el => el.textContent.trim())
-                .filter(t => t.length > 0);
-              text = lines.join('\n');
-            } else {
-              const fallback = document.querySelector('.query-text');
-              text = fallback ? fallback.textContent.trim() : '';
-            }
-
-            let imgUrl = '';
-            const img = document.querySelector('img.image.loaded');
-            if (img && img.src && !img.src.includes('data:image')) imgUrl = img.src;
-            else {
-              const secondary = document.querySelector('img[src*="content-ad-pc.googleapis.com"]');
-              imgUrl = secondary ? secondary.src : '';
-            }
-            return { conversationTitle, text, imgUrl };
-          });
-
-          const genericTitles = new Set(['预览或打开此项内容', 'Untitled Prompt', '(no aria-label)']);
-          const promptFirstLine = (promptData.text || '').split('\n')[0].trim();
-          const fromPrompt = promptFirstLine.length > 0 ? promptFirstLine.slice(0, 80) : '';
-          const fromCard = genericTitles.has(item.title) ? '' : String(item.title || '').trim();
-          const displayTitle =
-            (promptData.conversationTitle && promptData.conversationTitle.trim()) ||
-            fromPrompt ||
-            fromCard ||
-            'Untitled Prompt';
-
-          results.push({
-            id: `gemini_${Date.now()}_${results.length}`,
-            title: displayTitle,
-            promptText: promptData.text,
-            imageUrl: promptData.imgUrl || item.thumbSrc,
-            genres: [],
-            styles: [],
-            moods: [],
-            createdAt: new Date().toISOString(),
-            source: { name: 'Gemini', url: sessionPage.url() }
-          });
-
-          logI(`✅ [${results.length}] ${displayTitle}`);
-        } catch (e) {
-          console.warn('⚠️ Extract(row-batch) failed for item:', item.thumbSrc, e?.message || e);
-        } finally {
-          if (opened.kind === 'newTab') {
-            await sessionPage.close().catch(() => null);
-            await page.bringToFront().catch(() => null);
-          } else if (opened.kind === 'samePage') {
-            await page.goBack({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(async () => {
-              await page.goto(MY_STUFF_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-            });
-          }
-
-          // Restore scroll position (best-effort) so we keep working on the same row "window".
-          if (scrollBefore) await scrollListTo(page, scrollBefore.scrollTop || 0);
-          await waitForCardList(page);
-          await waitForHydratedCardContainers(page);
-          await sleep(EXTRACT_SCROLL_PAUSE_MS);
-        }
+    if (unprocessed.length === 0) {
+      // Nothing new in viewport -> scroll down
+      const delta = Math.max(200, Math.floor((metrics?.clientHeight || viewportHeight || 600) * 0.8));
+      logI(`🧭 extract: step=${steps} viewport exhausted -> Scrolling by ${delta}px`);
+      
+      await scrollListBy(page, scrollSign * delta);
+      await sleep(EXTRACT_SCROLL_PAUSE_MS);
+      
+      if (processed.size === lastProcessedCount) {
+        sameCountSteps++;
+        if (sameCountSteps >= 4) idle++;
+      } else {
+        sameCountSteps = 0;
+        idle = 0;
       }
-
-      if (processed.size === before) idle++;
-      else idle = 0;
+      lastProcessedCount = processed.size;
+      continue;
     }
 
-    // After finishing 1..N in the first row, scroll by ~one row height and repeat.
-    const effectiveRowDelta = Math.max(40, Math.round(Number.isFinite(rowDelta) && rowDelta > 0 ? rowDelta : 220));
-    await scrollListBy(page, scrollSign * effectiveRowDelta);
-    await sleep(EXTRACT_SCROLL_PAUSE_MS);
+    // Process new items in current viewport
+    logI(`🧭 extract: step=${steps} processing ${unprocessed.length} new targets in viewport`);
+    idle = 0;
+    sameCountSteps = 0;
+    lastProcessedCount = processed.size;
+
+    for (let j = 0; j < unprocessed.length; j++) {
+      if (limit && results.length >= limit) break;
+      const item = unprocessed[j];
+      processed.add(item.thumbSrc);
+
+      const startUrl = page.url();
+      const scrollBefore = await getListScrollMetrics(page);
+
+      const opened = await (async () => {
+        // Locate the card host by matching thumbnail src via XPath
+        const x = `xpath=//img[contains(@class,"thumbnail") and @src=${xpathLiteral(item.thumbSrc)}]/ancestor::library-item-card[1]`;
+        const cardHost = page.locator(x).first();
+        const countHost = await cardHost.count().catch(() => 0);
+
+        if (countHost > 0) {
+          const sessionUrl = await resolveSessionUrlFromCard(page, cardHost);
+          if (sessionUrl) {
+            const sp = await context.newPage();
+            logI(`📖 [${results.length + 1}] Opening in new tab: ${item.title.slice(0, 40)}`);
+            await sp.goto(sessionUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            return { kind: 'newTab', page: sp };
+          }
+          return await clickCardWithRetries({
+            page,
+            card: cardHost,
+            index: `${results.length + 1}`,
+            titleForLog: item.title || `Item ${j + 1}`,
+          });
+        }
+
+        // Fallback: evaluate click by exact src match
+        const clicked = await page.evaluate((src) => {
+          const imgEl = Array.from(document.querySelectorAll('img.thumbnail')).find(
+            (i) => i.getAttribute('src') === src || i.src === src
+          );
+          if (!imgEl) return false;
+          imgEl.scrollIntoView({ block: 'center' });
+          imgEl.click();
+          return true;
+        }, item.thumbSrc).catch(() => false);
+
+        if (clicked) {
+          await waitForSessionOpen(page, startUrl);
+          return { kind: 'samePage', page };
+        }
+        return { kind: 'failed', page };
+      })();
+
+      const sessionPage = opened?.page;
+      if (!opened || opened.kind === 'failed' || !sessionPage) {
+        // count failures as no-progress for idle heuristics
+        idle++;
+        continue;
+      }
+
+      try {
+        await sessionPage.locator(SESSION_READY_SELECTOR).first().waitFor({ state: 'visible', timeout: 25000 });
+        await page.waitForTimeout(1500);
+
+        const promptData = await sessionPage.evaluate(() => {
+          let conversationTitle = '';
+          const ct = document.querySelector('.conversation-title');
+          if (ct && ct.textContent) conversationTitle = ct.textContent.trim();
+
+          let text = '';
+          const bubble = document.querySelector('.user-query-bubble-with-background');
+          if (bubble) {
+            const lines = Array.from(bubble.querySelectorAll('.query-text-line'))
+              .map(el => el.textContent.trim())
+              .filter(t => t.length > 0);
+            text = lines.join('\n');
+          } else {
+            const fallback = document.querySelector('.query-text');
+            text = fallback ? fallback.textContent.trim() : '';
+          }
+
+          let imgUrl = '';
+          const img = document.querySelector('img.image.loaded');
+          if (img && img.src && !img.src.includes('data:image')) imgUrl = img.src;
+          else {
+            const secondary = document.querySelector('img[src*="content-ad-pc.googleapis.com"]');
+            imgUrl = secondary ? secondary.src : '';
+          }
+          return { conversationTitle, text, imgUrl };
+        });
+
+        const genericTitles = new Set(['预览或打开此项内容', 'Untitled Prompt', '(no aria-label)']);
+        const promptFirstLine = (promptData.text || '').split('\n')[0].trim();
+        const fromPrompt = promptFirstLine.length > 0 ? promptFirstLine.slice(0, 80) : '';
+        const fromCard = genericTitles.has(item.title) ? '' : String(item.title || '').trim();
+        const displayTitle =
+          (promptData.conversationTitle && promptData.conversationTitle.trim()) ||
+          fromPrompt ||
+          fromCard ||
+          'Untitled Prompt';
+
+        results.push({
+          id: `gemini_${Date.now()}_${results.length}`,
+          title: displayTitle,
+          promptText: promptData.text,
+          imageUrl: promptData.imgUrl || item.thumbSrc,
+          genres: [],
+          styles: [],
+          moods: [],
+          createdAt: new Date().toISOString(),
+          source: { name: 'Gemini', url: sessionPage.url() }
+        });
+
+        logI(`✅ [${results.length}] ${displayTitle}`);
+      } catch (e) {
+        console.warn('⚠️ Extract failed for item:', item.thumbSrc, e?.message || e);
+        idle++;
+      } finally {
+        if (opened.kind === 'newTab') {
+          await sessionPage.close().catch(() => null);
+          await page.bringToFront().catch(() => null);
+        } else if (opened.kind === 'samePage') {
+          await page.goBack({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(async () => {
+            await page.goto(MY_STUFF_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          });
+        }
+
+        // Restore scroll position (best-effort)
+        if (scrollBefore) await scrollListTo(page, scrollBefore.scrollTop || 0);
+        await waitForCardList(page);
+        await waitForHydratedCardContainers(page);
+        await sleep(EXTRACT_SCROLL_PAUSE_MS);
+      }
+    }
   }
 
-  logI(`🎯 Extract(row-batch) done: results=${results.length} processed=${processed.size} steps=${steps} idle=${idle}`);
+  logI(`🎯 Extract done: results=${results.length} processed=${processed.size} steps=${steps} idle=${idle}`);
   return results;
 }
 
